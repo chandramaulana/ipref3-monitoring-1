@@ -146,6 +146,21 @@ body {
   padding-top: 14px;
 }
 
+.sidebar-clock {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#runningTaskInfo,
+#scheduleRunningInfo {
+  font-size: 0.95rem;
+  opacity: 0.92;
+}
+
 .realtime-indicator {
   display: inline-flex;
   align-items: center;

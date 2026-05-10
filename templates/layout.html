@@ -32,10 +32,12 @@
         <div class="sidebar-label">Navigasi</div>
         <nav class="nav-links">
           <a href="{{ url_for('index') }}" class="nav-link-item">Dashboard</a>
+          <a href="{{ url_for('schedule_page') }}" class="nav-link-item">Schedule</a>
           <a href="{{ url_for('history_page') }}" class="nav-link-item">History</a>
         </nav>
       </div>
       <div class="sidebar-footer">
+        <div id="sidebarClock" class="sidebar-clock">--:--:--</div>
         <button id="themeToggle" class="btn btn-outline-light btn-sm">Toggle Theme</button>
         <div id="realtimeIndicator" class="realtime-indicator offline">WS OFFLINE</div>
       </div>
@@ -63,6 +65,24 @@
           document.documentElement.setAttribute('data-bs-theme', next);
           localStorage.setItem(key, next);
         });
+      }
+
+      const clock = document.getElementById('sidebarClock');
+      if (clock) {
+        const tick = () => {
+          const now = new Date();
+          clock.textContent = now.toLocaleString('id-ID', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          });
+        };
+        tick();
+        setInterval(tick, 1000);
       }
     })();
   </script>

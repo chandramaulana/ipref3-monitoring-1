@@ -10,7 +10,8 @@
   },
   "data_paths": {
     "history": "data/history.json",
-    "sessions": "data/sessions.json"
+    "sessions": "data/sessions.json",
+    "schedules": "data/schedules.json"
   },
   "defaults": {
     "tcp": {

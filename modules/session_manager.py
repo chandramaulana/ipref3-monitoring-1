@@ -42,6 +42,19 @@ class SessionManager:
             self._history_cache = load_json_file(self.history_path, [])
             return list(self._history_cache)
 
+    def test_name_exists_in_history(self, name: str) -> bool:
+        target = (name or "").strip().lower()
+        if not target:
+            return False
+
+        with self._lock:
+            self._history_cache = load_json_file(self.history_path, [])
+            for item in self._history_cache:
+                existing = (item.get("test_name") or "").strip().lower()
+                if existing == target:
+                    return True
+        return False
+
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             self._sessions_cache = load_json_file(self.sessions_path, {})

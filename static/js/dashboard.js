@@ -1,16 +1,12 @@
 (function () {
   const socket = io();
   const charts = window.NetworkCharts;
-
-  const form = document.getElementById("testForm");
-  const protocolSelect = document.getElementById("protocolSelect");
-  const tcpFields = document.getElementById("tcpFields");
-  const udpFields = document.getElementById("udpFields");
   const logConsole = document.getElementById("logConsole");
   const logFilter = document.getElementById("logFilter");
 
   const statusBadge = document.getElementById("systemStatusBadge");
   const realtimeIndicator = document.getElementById("realtimeIndicator");
+  const runningTaskInfo = document.getElementById("runningTaskInfo");
 
   const cards = {
     currentThroughput: document.getElementById("currentThroughput"),
@@ -36,10 +32,20 @@
     realtimeIndicator.classList.toggle("offline", !connected);
   }
 
-  function setProtocolUI() {
-    const protocol = protocolSelect.value;
-    tcpFields.classList.toggle("d-none", protocol !== "TCP");
-    udpFields.classList.toggle("d-none", protocol !== "UDP");
+  function renderRunningTask(session) {
+    if (!runningTaskInfo) {
+      return;
+    }
+    if (!session) {
+      runningTaskInfo.textContent = "Belum ada task aktif.";
+      return;
+    }
+
+    const source = session.trigger_source === "schedule" ? "Scheduled Task" : "Manual";
+    const taskName = session.schedule_task_name || session.test_name || "-";
+    const proto = session.protocol || "-";
+    const host = session.host || "-";
+    runningTaskInfo.textContent = `${taskName} | ${source} | ${proto} | ${host}:${session.port || "-"}`;
   }
 
   function toText(value, suffix) {
@@ -75,44 +81,6 @@
     logConsole.scrollTop = logConsole.scrollHeight;
   }
 
-  async function startTest(evt) {
-    evt.preventDefault();
-
-    const fd = new FormData(form);
-    const protocol = fd.get("protocol");
-
-    const payload = {
-      test_name: fd.get("test_name"),
-      test_date: fd.get("test_date"),
-      description: fd.get("description"),
-      weather: fd.get("weather"),
-      host: fd.get("host"),
-      port: Number(fd.get("port")),
-      protocol,
-      sampling_interval: Number(protocol === "UDP" ? fd.get("duration_udp") : fd.get("duration")),
-      auto_stop_minutes: Number(fd.get("auto_stop_minutes")),
-      streams: Number(fd.get("streams")),
-      mss: Number(fd.get("mss")),
-      bandwidth: fd.get("bandwidth"),
-      packet_size: Number(fd.get("packet_size")),
-    };
-
-    const res = await fetch("/api/test/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    if (!data.ok) {
-      appendLog({ timestamp: new Date().toLocaleString(), level: "error", message: data.error || "Gagal start test" });
-      return;
-    }
-
-    charts.reset();
-    setStatus(true);
-  }
-
   async function stopTest() {
     await fetch("/api/test/stop", { method: "POST" });
   }
@@ -128,6 +96,7 @@
       .then((r) => r.json())
       .then((data) => {
         setStatus(data.running);
+        renderRunningTask(data.session);
       });
   }
 
@@ -144,6 +113,7 @@
 
   socket.on("status_update", (payload) => {
     setStatus(payload.running);
+    renderRunningTask(payload.session || null);
   });
 
   socket.on("log_event", (payload) => appendLog(payload));
@@ -166,11 +136,8 @@
   document.getElementById("clearLogBtn").addEventListener("click", clearLogs);
   document.getElementById("refreshBtn").addEventListener("click", refreshStatus);
   logFilter.addEventListener("change", renderLogs);
-  protocolSelect.addEventListener("change", setProtocolUI);
-  form.addEventListener("submit", startTest);
 
   charts.init();
-  setProtocolUI();
   setSocketIndicator(socket.connected);
   refreshStatus();
 })();

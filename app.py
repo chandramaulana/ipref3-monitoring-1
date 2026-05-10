@@ -1,5 +1,6 @@
 import json
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
@@ -9,6 +10,7 @@ from flask_socketio import SocketIO
 from modules.exporter import apply_filters, export_csv, export_excel, export_filename, export_json, export_jsonl
 from modules.iperf_runner import IperfTestRunner
 from modules.logger import AppLogger
+from modules.schedule_manager import ScheduleManager
 from modules.session_manager import SessionManager
 from modules.statistics import LiveStatistics
 from modules.utils import (
@@ -39,11 +41,15 @@ session_manager = SessionManager(
     history_path=BASE_DIR / CONFIG["data_paths"]["history"],
     sessions_path=BASE_DIR / CONFIG["data_paths"]["sessions"],
 )
+schedules_path = BASE_DIR / CONFIG.get("data_paths", {}).get("schedules", "data/schedules.json")
+schedule_manager = ScheduleManager(schedules_path=schedules_path)
 
 state_lock = threading.Lock()
 active_runner: IperfTestRunner | None = None
 active_session: Dict[str, Any] | None = None
 live_stats = LiveStatistics()
+scheduler_stop_event = threading.Event()
+scheduler_thread: threading.Thread | None = None
 
 
 def _emit_log(level: str, message: str) -> None:
@@ -188,6 +194,7 @@ def _start_callbacks(session_payload: Dict[str, Any]):
         summary = _runtime_summary(session_payload_local)
         session_payload_local["summary"] = summary
         session_payload_local["status"] = "completed" if exit_code == 0 else "stopped"
+        schedule_task_id = session_payload_local.get("schedule_task_id", "")
 
         history_update = {
             "status": session_payload_local["status"],
@@ -197,6 +204,8 @@ def _start_callbacks(session_payload: Dict[str, Any]):
 
         session_manager.save_session(session_payload_local["session_id"], session_payload_local)
         session_manager.update_history_summary(session_payload_local["session_id"], history_update)
+        if schedule_task_id:
+            schedule_manager.mark_completed(schedule_task_id, session_payload_local["status"])
 
         socketio.emit("session_complete", {"session_id": session_payload_local["session_id"], "summary": summary})
         socketio.emit("status_update", {"running": False, "session": session_payload_local})
@@ -255,6 +264,99 @@ def _build_session_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     return session_payload
 
 
+def _start_test_workflow(
+    payload: Dict[str, Any],
+    trigger_source: str = "manual",
+    schedule_task_id: str = "",
+    schedule_task_name: str = "",
+):
+    global active_runner, active_session, live_stats
+
+    with state_lock:
+        if active_session:
+            return {"ok": False, "error": "Test masih berjalan"}, 409
+
+    requested_test_name = sanitize_text(payload.get("test_name"), "Untitled Test")
+    if session_manager.test_name_exists_in_history(requested_test_name):
+        return {"ok": False, "error": "Nama pengujian sudah ada di history. Gunakan nama lain."}, 400
+
+    host = sanitize_text(payload.get("host"), "")
+    if not validate_host(host):
+        return {"ok": False, "error": "Host tidak valid"}, 400
+
+    available, reason = detect_iperf_binary()
+    if not available:
+        return {"ok": False, "error": reason}, 400
+
+    try:
+        session_payload = _build_session_payload(payload)
+    except (ValueError, TypeError):
+        return {"ok": False, "error": "Parameter numerik tidak valid"}, 400
+
+    session_payload["trigger_source"] = trigger_source
+    if schedule_task_id:
+        session_payload["schedule_task_id"] = schedule_task_id
+    if schedule_task_name:
+        session_payload["schedule_task_name"] = schedule_task_name
+
+    on_metric, on_ping, on_log, on_finished = _start_callbacks(session_payload)
+
+    runner = IperfTestRunner(
+        session_payload=session_payload,
+        on_metric=on_metric,
+        on_ping=on_ping,
+        on_log=on_log,
+        on_finished=on_finished,
+    )
+
+    with state_lock:
+        active_session = session_payload
+        active_runner = runner
+        live_stats = LiveStatistics()
+
+    session_manager.save_session(session_payload["session_id"], session_payload)
+    session_manager.append_history(_build_history_stub(session_payload))
+
+    logger.info(f"Session started: {session_payload['session_id']} ({trigger_source})")
+    _emit_log("system", f"Session {session_payload['session_id']} started via {trigger_source}")
+
+    runner.start()
+    socketio.emit("status_update", {"running": True, "session": session_payload})
+    return {"ok": True, "session": session_payload}, 200
+
+
+def _scheduler_loop() -> None:
+    while not scheduler_stop_event.is_set():
+        due_items = schedule_manager.due_tasks(datetime.now())
+        for task in due_items:
+            with state_lock:
+                busy = active_session is not None
+            if busy:
+                continue
+
+            schedule_manager.mark_running(task["id"])
+            payload = task.get("payload", {})
+            response, status = _start_test_workflow(
+                payload,
+                trigger_source="schedule",
+                schedule_task_id=task.get("id", ""),
+                schedule_task_name=task.get("task_name", "Scheduled Task"),
+            )
+            if status >= 400:
+                schedule_manager.mark_failed(task["id"], response.get("error", "Gagal mengeksekusi task"))
+            socketio.emit("schedule_update", {"task_id": task.get("id", ""), "status": "running" if status < 400 else "failed"})
+
+        scheduler_stop_event.wait(1)
+
+
+def _start_scheduler_thread() -> None:
+    global scheduler_thread
+    if scheduler_thread and scheduler_thread.is_alive():
+        return
+    scheduler_thread = threading.Thread(target=_scheduler_loop, daemon=True)
+    scheduler_thread.start()
+
+
 @app.context_processor
 def inject_brand():
     return {"brand": CONFIG.get("brand", {})}
@@ -263,6 +365,11 @@ def inject_brand():
 @app.route("/")
 def index():
     return render_template("index.html", config=CONFIG)
+
+
+@app.route("/schedule")
+def schedule_page():
+    return render_template("schedule.html", config=CONFIG)
 
 
 @app.route("/history")
@@ -284,57 +391,26 @@ def api_status():
     with state_lock:
         running = active_session is not None
         current = active_session
-    return jsonify({"running": running, "session": current, "iperf_available": available, "iperf_binary": iperf_path})
+    return jsonify(
+        {
+            "running": running,
+            "session": current,
+            "iperf_available": available,
+            "iperf_binary": iperf_path,
+            "running_task": {
+                "source": (current or {}).get("trigger_source", ""),
+                "name": (current or {}).get("schedule_task_name") or (current or {}).get("test_name", "-"),
+                "schedule_task_id": (current or {}).get("schedule_task_id", ""),
+            },
+        }
+    )
 
 
 @app.route("/api/test/start", methods=["POST"])
 def api_start_test():
-    global active_runner, active_session, live_stats
-
     payload = request.get_json(force=True, silent=True) or {}
-
-    with state_lock:
-        if active_session:
-            return jsonify({"ok": False, "error": "Test masih berjalan"}), 409
-
-    host = sanitize_text(payload.get("host"), "")
-    if not validate_host(host):
-        return jsonify({"ok": False, "error": "Host tidak valid"}), 400
-
-    available, reason = detect_iperf_binary()
-    if not available:
-        return jsonify({"ok": False, "error": reason}), 400
-
-    try:
-        session_payload = _build_session_payload(payload)
-    except (ValueError, TypeError):
-        return jsonify({"ok": False, "error": "Parameter numerik tidak valid"}), 400
-
-    on_metric, on_ping, on_log, on_finished = _start_callbacks(session_payload)
-
-    runner = IperfTestRunner(
-        session_payload=session_payload,
-        on_metric=on_metric,
-        on_ping=on_ping,
-        on_log=on_log,
-        on_finished=on_finished,
-    )
-
-    with state_lock:
-        active_session = session_payload
-        active_runner = runner
-        live_stats = LiveStatistics()
-
-    session_manager.save_session(session_payload["session_id"], session_payload)
-    session_manager.append_history(_build_history_stub(session_payload))
-
-    logger.info(f"Session started: {session_payload['session_id']}")
-    _emit_log("system", f"Session {session_payload['session_id']} started")
-
-    runner.start()
-    socketio.emit("status_update", {"running": True, "session": session_payload})
-
-    return jsonify({"ok": True, "session": session_payload})
+    response, status = _start_test_workflow(payload, trigger_source="manual")
+    return jsonify(response), status
 
 
 @app.route("/api/test/stop", methods=["POST"])
@@ -398,6 +474,68 @@ def api_delete_session(session_id: str):
     return jsonify({"ok": True})
 
 
+@app.route("/api/schedules", methods=["GET"])
+def api_list_schedules():
+    return jsonify({"ok": True, "tasks": schedule_manager.list_tasks()})
+
+
+@app.route("/api/schedules", methods=["POST"])
+def api_create_schedule():
+    payload = request.get_json(force=True, silent=True) or {}
+    task_name = sanitize_text(payload.get("task_name"), "Scheduled Task")
+    scheduled_at = sanitize_text(payload.get("scheduled_at"), "")
+    task_payload = payload.get("payload", {})
+    requested_test_name = sanitize_text(task_payload.get("test_name"), "Untitled Test")
+
+    if session_manager.test_name_exists_in_history(task_name):
+        return jsonify({"ok": False, "error": "Nama task sudah ada di history. Gunakan nama lain."}), 400
+    if session_manager.test_name_exists_in_history(requested_test_name):
+        return jsonify({"ok": False, "error": "Nama pengujian sudah ada di history. Gunakan nama lain."}), 400
+
+    try:
+        run_dt = datetime.fromisoformat(scheduled_at)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Format tanggal/jam tidak valid"}), 400
+
+    if run_dt < datetime.now():
+        return jsonify({"ok": False, "error": "Jadwal harus di masa depan"}), 400
+
+    created = schedule_manager.create_task({"task_name": task_name, "scheduled_at": scheduled_at, "payload": task_payload})
+    return jsonify({"ok": True, "task": created})
+
+
+@app.route("/api/schedules/<task_id>", methods=["PUT"])
+def api_update_schedule(task_id: str):
+    payload = request.get_json(force=True, silent=True) or {}
+    task_name = sanitize_text(payload.get("task_name"), "Scheduled Task")
+    scheduled_at = sanitize_text(payload.get("scheduled_at"), "")
+    task_payload = payload.get("payload", {})
+    requested_test_name = sanitize_text(task_payload.get("test_name"), "Untitled Test")
+
+    if session_manager.test_name_exists_in_history(task_name):
+        return jsonify({"ok": False, "error": "Nama task sudah ada di history. Gunakan nama lain."}), 400
+    if session_manager.test_name_exists_in_history(requested_test_name):
+        return jsonify({"ok": False, "error": "Nama pengujian sudah ada di history. Gunakan nama lain."}), 400
+
+    try:
+        datetime.fromisoformat(scheduled_at)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Format tanggal/jam tidak valid"}), 400
+
+    updated = schedule_manager.update_task(task_id, {"task_name": task_name, "scheduled_at": scheduled_at, "payload": task_payload})
+    if not updated:
+        return jsonify({"ok": False, "error": "Task tidak ditemukan atau sedang berjalan"}), 404
+    return jsonify({"ok": True, "task": updated})
+
+
+@app.route("/api/schedules/<task_id>", methods=["DELETE"])
+def api_delete_schedule(task_id: str):
+    ok = schedule_manager.delete_task(task_id)
+    if not ok:
+        return jsonify({"ok": False, "error": "Task tidak ditemukan"}), 404
+    return jsonify({"ok": True})
+
+
 @app.route("/api/export")
 def api_export():
     records = session_manager.list_history()
@@ -442,6 +580,9 @@ def api_export():
 @socketio.on("connect")
 def on_connect():
     socketio.emit("status_update", {"running": active_session is not None, "session": active_session})
+
+
+_start_scheduler_thread()
 
 
 if __name__ == "__main__":
