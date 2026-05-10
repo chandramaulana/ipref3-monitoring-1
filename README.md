@@ -4,18 +4,22 @@ Dashboard web untuk monitoring dan pengujian jaringan berbasis iPerf3 dengan ars
 
 ## Ringkasan Fitur
 
-- Realtime test TCP/UDP via WebSocket
-- Start/Stop test iPerf3 dengan subprocess yang aman
+- Dashboard Monitoring Realtime fokus untuk observasi metrik realtime
+- Start/Stop test iPerf3 via API dan via Scheduler otomatis
 - Pola sampling per siklus: iPerf3 -> ping -> ulang sampai auto-stop
 - Monitoring throughput, transfer, jitter, packet loss, retransmit, ping
 - Realtime chart dan terminal-style log viewer
+- Sidebar statis (tidak ikut scroll) + jam realtime + indikator koneksi websocket
+- Schedule: create, edit, delete task, dan eksekusi pada tanggal/jam tertentu
 - History: search, filter, sort, pagination, delete session
 - Final report: ringkasan, chart, tabel semua data per sampel + waktu
 - Export data: JSON, JSONL, CSV, XLSX (termasuk detail log)
+- Validasi unik: nama task/nama pengujian tidak boleh sama dengan nama pengujian di history
 - Penyimpanan lokal:
   - logs/test_logs.jsonl
   - data/history.json
   - data/sessions.json
+  - data/schedules.json
 - Kompatibel Windows 10/11 dan Ubuntu Linux
 
 ## Teknologi
@@ -38,7 +42,8 @@ dashboard-ipsec/
 |-- README.md
 |-- data/
 |   |-- history.json
-|   `-- sessions.json
+|   |-- sessions.json
+|   `-- schedules.json
 |-- logs/
 |   |-- test_logs.jsonl
 |   |-- runtime.log
@@ -49,6 +54,7 @@ dashboard-ipsec/
 |   |-- logger.py
 |   |-- parser.py
 |   |-- ping_monitor.py
+|   |-- schedule_manager.py
 |   |-- session_manager.py
 |   |-- statistics.py
 |   |-- utils.py
@@ -59,13 +65,15 @@ dashboard-ipsec/
 |   |-- js/
 |   |   |-- charts.js
 |   |   |-- dashboard.js
-|   |   `-- history.js
+|   |   |-- history.js
+|   |   `-- schedule.js
 |   `-- img/
 |       `-- Logo_Unhan.png (atau file logo Anda)
 `-- templates/
     |-- layout.html
     |-- index.html
     |-- history.html
+    |-- schedule.html
     `-- report.html
 ```
 
@@ -154,6 +162,7 @@ Field penting:
 - defaults.tcp / defaults.udp: default parameter test
 - defaults.auto_stop_minutes: default lama pengujian
 - brand.campus_name / brand.student_name / brand.logo_path: branding sidebar
+- data_paths.schedules: lokasi penyimpanan task scheduler
 
 ## Alur Pengujian
 
@@ -167,14 +176,23 @@ Flow per sampling interval:
 
 ## Cara Pakai Dashboard
 
-1. Isi form pengujian di halaman Dashboard.
-2. Set protocol TCP/UDP.
-3. Isi sampling interval (detik) dan auto-stop (menit).
-4. Klik Start Test.
-5. Pantau kartu statistik, chart realtime, dan log realtime.
-6. Buka History untuk melihat daftar sesi.
-7. Klik Detail untuk membuka Final Report.
-8. Unduh hasil dari Final Report (Excel) atau endpoint export API.
+1. Buka halaman Dashboard untuk monitoring realtime.
+2. Pantau kartu statistik, chart realtime, panel task aktif, dan log realtime.
+3. Gunakan tombol Stop Test jika ada test/task yang sedang berjalan.
+4. Gunakan tombol Refresh Data untuk sinkronisasi status terbaru.
+
+## Cara Pakai Schedule
+
+1. Buka menu Schedule.
+2. Isi Form Task pengujian (host, protocol, sampling, auto-stop, dan parameter lain).
+3. Atur tanggal dan jam eksekusi.
+4. Klik Simpan Task.
+5. Task akan berjalan otomatis saat waktu jadwal tercapai.
+6. Anda bisa edit/hapus task selama belum running.
+
+Catatan validasi nama:
+
+- Nama task dan nama pengujian akan ditolak jika sama dengan nama pengujian yang sudah ada di history.
 
 ## Endpoint API
 
@@ -183,6 +201,13 @@ Flow per sampling interval:
 - POST /api/test/start
 - POST /api/test/stop
 - GET /api/status
+
+### Schedule
+
+- GET /api/schedules
+- POST /api/schedules
+- PUT /api/schedules/<task_id>
+- DELETE /api/schedules/<task_id>
 
 ### Log and history
 
@@ -263,6 +288,10 @@ pip install openpyxl
 ### Host invalid
 
 - Gunakan IP/domain yang bisa di-resolve dari mesin server.
+
+### Nama task/pengujian ditolak
+
+- Jika muncul error nama sudah ada di history, gunakan nama task/pengujian yang berbeda.
 
 ## Lisensi
 
