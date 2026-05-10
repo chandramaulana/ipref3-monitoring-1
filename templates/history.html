@@ -1,0 +1,44 @@
+{% extends 'layout.html' %}
+{% block title %}Riwayat Pengujian{% endblock %}
+
+{% block content %}
+<div class="glass-panel p-3 mb-4">
+  <h3>History Pengujian</h3>
+  <div class="row g-2 mt-1">
+    <div class="col-md-2"><input id="filterProtocol" class="form-control" placeholder="Protocol"></div>
+    <div class="col-md-2"><input id="filterName" class="form-control" placeholder="Nama Pengujian"></div>
+    <div class="col-md-2"><input id="filterHost" class="form-control" placeholder="Host"></div>
+    <div class="col-md-2"><input id="filterDate" class="form-control" type="date"></div>
+    <div class="col-md-2"><input id="filterSession" class="form-control" placeholder="Session ID"></div>
+    <div class="col-md-2 d-grid"><button id="applyFilter" class="btn btn-primary">Apply Filter</button></div>
+  </div>
+</div>
+
+<div class="glass-panel p-3">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover align-middle" id="historyTable">
+      <thead>
+        <tr>
+          <th data-sort="session_id">Session ID</th>
+          <th data-sort="test_name">Nama</th>
+          <th data-sort="protocol">Protocol</th>
+          <th data-sort="host">Host</th>
+          <th data-sort="start_time">Start</th>
+          <th data-sort="status">Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="d-flex justify-content-between align-items-center">
+    <button id="prevPage" class="btn btn-outline-light btn-sm">Prev</button>
+    <span id="pageInfo"></span>
+    <button id="nextPage" class="btn btn-outline-light btn-sm">Next</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
+{% endblock %}

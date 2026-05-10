@@ -1,0 +1,147 @@
+{% extends 'layout.html' %}
+{% block title %}Laporan Session{% endblock %}
+
+{% block content %}
+<div class="glass-panel p-4">
+  {% if not session %}
+    <h3>Session tidak ditemukan</h3>
+  {% else %}
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h3>Final Report - {{ session.session_id }}</h3>
+        <p>{{ session.test_name }} | {{ session.protocol }} | {{ session.host }}:{{ session.port }}</p>
+      </div>
+      <a class="btn btn-success" href="{{ url_for('api_export') }}?format=xlsx&session_id={{ session.session_id }}">Download Excel</a>
+    </div>
+
+    <div class="row g-3 mt-2">
+      <div class="col-md-3"><div class="metric-card"><span>Average Throughput</span><strong>{{ '%.1f'|format(summary.average_throughput or 0) }} Mbps</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Max Throughput</span><strong>{{ '%.1f'|format(summary.max_throughput or 0) }} Mbps</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Average Jitter</span><strong>{{ '%.1f'|format(summary.average_jitter or 0) }} ms</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Average Ping</span><strong>{{ '%.1f'|format(summary.average_ping or 0) }} ms</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Total Packet Loss</span><strong>{{ '%.1f'|format(summary.total_packet_loss or 0) }} %</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Total Transfer</span><strong>{{ '%.1f'|format(summary.total_transfer_mb or 0) }} MB</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Total Sample</span><strong>{{ summary.total_samples or 0 }}</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Total Retransmit</span><strong>{{ summary.total_retransmits or 0 }}</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Lost Datagram</span><strong>{{ summary.total_lost_datagrams or 0 }}</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Total Datagram</span><strong>{{ summary.total_datagrams or 0 }}</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Duration</span><strong>{{ '%.1f'|format(summary.test_duration_seconds or 0) }} s</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>End Time</span><strong>{{ summary.end_time }}</strong></div></div>
+    </div>
+
+    <div class="row g-3 mt-2">
+      <div class="col-lg-6"><div class="glass-panel chart-wrap"><canvas id="reportThroughputChart"></canvas></div></div>
+      <div class="col-lg-6"><div class="glass-panel chart-wrap"><canvas id="reportQualityChart"></canvas></div></div>
+    </div>
+
+    <div class="glass-panel p-3 mt-3">
+      <h5 class="mb-3">Detail Data Per Sampel</h5>
+      <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover align-middle">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Waktu</th>
+              <th>Interval (s)</th>
+              <th>Throughput (Mbps)</th>
+              <th>Transfer (MB)</th>
+              <th>Jitter (ms)</th>
+              <th>Packet Loss (%)</th>
+              <th>Ping (ms)</th>
+              <th>Retransmit</th>
+              <th>Lost/Total Datagram</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in session.metrics %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ m.timestamp or '-' }}</td>
+              <td>{{ '%.1f'|format(m.interval_end or 0) }}</td>
+              <td>{{ '%.1f'|format(m.throughput_mbps or 0) }}</td>
+              <td>{{ '%.1f'|format(m.transfer_mb or 0) }}</td>
+              <td>{{ '%.1f'|format(m.jitter_ms or 0) }}</td>
+              <td>{{ '%.1f'|format(m.packet_loss_percent or 0) }}</td>
+              <td>{{ '%.1f'|format(m.ping_ms or 0) }}</td>
+              <td>{{ m.retransmits or 0 }}</td>
+              <td>{{ m.lost_datagrams or 0 }}/{{ m.total_datagrams or 0 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      window.REPORT_METRICS = {{ session.metrics | tojson }};
+    </script>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if session %}
+<script>
+  (function () {
+    const metrics = window.REPORT_METRICS || [];
+    const labels = metrics.map((m, i) => `${Number(m.interval_end ?? i + 1).toFixed(1)}s`);
+    const throughput = metrics.map((m) => Number(Number(m.throughput_mbps || 0).toFixed(1)));
+    const ping = metrics.map((m) => Number(Number(m.ping_ms || 0).toFixed(1)));
+    const jitter = metrics.map((m) => Number(Number(m.jitter_ms || 0).toFixed(1)));
+    const packetLoss = metrics.map((m) => Number(Number(m.packet_loss_percent || 0).toFixed(1)));
+
+    new Chart(document.getElementById("reportThroughputChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Throughput Mbps",
+            data: throughput,
+            borderColor: "#ff9f1c",
+            backgroundColor: "#ff9f1c33",
+            fill: true,
+            tension: 0.3,
+          },
+          {
+            label: "Ping ms",
+            data: ping,
+            borderColor: "#80ed99",
+            backgroundColor: "#80ed9933",
+            fill: false,
+            tension: 0.3,
+          },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false },
+    });
+
+    new Chart(document.getElementById("reportQualityChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Jitter ms",
+            data: jitter,
+            borderColor: "#4cc9f0",
+            backgroundColor: "#4cc9f033",
+            fill: true,
+            tension: 0.3,
+          },
+          {
+            label: "Packet Loss %",
+            data: packetLoss,
+            borderColor: "#f72585",
+            backgroundColor: "#f7258533",
+            fill: false,
+            tension: 0.3,
+          },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false },
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

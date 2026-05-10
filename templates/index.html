@@ -1,0 +1,136 @@
+{% extends 'layout.html' %}
+{% block title %}Dashboard Realtime{% endblock %}
+
+{% block content %}
+<div class="hero glass-panel mb-4">
+  <div>
+    <h2>Dashboard Monitoring Realtime</h2>
+    <p>Monitoring QOS Jaringan (IPSEC, IPREF3, STARLINK)</p>
+  </div>
+  <div class="hero-status" id="systemStatusBadge">Idle</div>
+</div>
+
+<div class="row g-4">
+  <div class="col-xl-4">
+    <section class="glass-panel p-3 h-100">
+      <h5 class="mb-3">Form Pengujian</h5>
+      <form id="testForm" class="d-grid gap-2">
+        <div>
+          <label class="form-label" for="testName">Nama Pengujian</label>
+          <input id="testName" class="form-control" name="test_name" placeholder="Nama Pengujian" required>
+        </div>
+        <div>
+          <label class="form-label" for="testDate">Tanggal Pengujian</label>
+          <input id="testDate" class="form-control" name="test_date" type="date" required>
+        </div>
+        <div>
+          <label class="form-label" for="description">Keterangan</label>
+          <textarea id="description" class="form-control" name="description" rows="2" placeholder="Keterangan"></textarea>
+        </div>
+        <div>
+          <label class="form-label" for="weather">Kondisi Cuaca</label>
+          <input id="weather" class="form-control" name="weather" placeholder="Kondisi Cuaca">
+        </div>
+        <div>
+          <label class="form-label" for="host">Host iPerf3 Server</label>
+          <input id="host" class="form-control" name="host" placeholder="Host iPerf3 Server" required>
+        </div>
+        <div>
+          <label class="form-label" for="port">Port iPerf3</label>
+          <input id="port" class="form-control" name="port" type="number" value="5201" min="1" max="65535" required>
+        </div>
+        <div>
+          <label class="form-label" for="protocolSelect">Protocol</label>
+          <select class="form-select" name="protocol" id="protocolSelect">
+            <option value="TCP">TCP</option>
+            <option value="UDP">UDP</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label" for="autoStopMinutes">Auto Stop (menit)</label>
+          <input id="autoStopMinutes" class="form-control" name="auto_stop_minutes" type="number" value="5" min="1" max="1440">
+          <small class="form-help">Durasi test akan berhenti otomatis sesuai menit ini.</small>
+        </div>
+
+        <div id="tcpFields" class="d-grid gap-2">
+          <div>
+            <label class="form-label" for="samplingIntervalTcp">Sampling TCP (detik)</label>
+            <input id="samplingIntervalTcp" class="form-control" name="duration" type="number" value="60" min="1" max="3600">
+            <small class="form-help">Sampling 60 berarti update metrik dan ping setiap 60 detik.</small>
+          </div>
+          <div>
+            <label class="form-label" for="streams">TCP Streams</label>
+            <input id="streams" class="form-control" name="streams" type="number" value="1" min="1" max="32" placeholder="TCP Streams">
+          </div>
+          <div>
+            <label class="form-label" for="mss">TCP MSS</label>
+            <input id="mss" class="form-control" name="mss" type="number" value="1518" min="512" max="9000" placeholder="TCP MSS">
+          </div>
+        </div>
+
+        <div id="udpFields" class="d-grid gap-2 d-none">
+          <div>
+            <label class="form-label" for="samplingIntervalUdp">Sampling UDP (detik)</label>
+            <input id="samplingIntervalUdp" class="form-control" name="duration_udp" type="number" value="60" min="1" max="3600" placeholder="UDP Sampling">
+          </div>
+          <div>
+            <label class="form-label" for="bandwidth">UDP Bandwidth</label>
+            <input id="bandwidth" class="form-control" name="bandwidth" value="20M" placeholder="UDP Bandwidth (20M)">
+          </div>
+          <div>
+            <label class="form-label" for="packetSize">UDP Packet Size</label>
+            <input id="packetSize" class="form-control" name="packet_size" type="number" value="512" min="64" max="65507" placeholder="UDP Packet Size">
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap">
+          <button id="startBtn" class="btn btn-success" type="submit">Start Test</button>
+          <button id="stopBtn" class="btn btn-danger" type="button">Stop Test</button>
+          <button id="clearLogBtn" class="btn btn-outline-warning" type="button">Clear Log</button>
+          <button id="refreshBtn" class="btn btn-outline-info" type="button">Refresh Data</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="col-xl-8">
+    <div class="row g-3 mb-3" id="statsCards">
+      <div class="col-md-3"><div class="metric-card"><span>Current Throughput</span><strong id="currentThroughput">0 Mbps</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Average Throughput</span><strong id="averageThroughput">0 Mbps</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Max Throughput</span><strong id="maxThroughput">0 Mbps</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Current Jitter</span><strong id="currentJitter">0 ms</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Average Jitter</span><strong id="averageJitter">0 ms</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Current Packet Loss</span><strong id="currentPacketLoss">0 %</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Current Ping</span><strong id="currentPing">0 ms</strong></div></div>
+      <div class="col-md-3"><div class="metric-card"><span>Average Ping</span><strong id="averagePing">0 ms</strong></div></div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-6"><div class="glass-panel chart-wrap"><canvas id="throughputChart"></canvas></div></div>
+      <div class="col-lg-6"><div class="glass-panel chart-wrap"><canvas id="jitterChart"></canvas></div></div>
+      <div class="col-lg-6"><div class="glass-panel chart-wrap"><canvas id="packetLossChart"></canvas></div></div>
+      <div class="col-lg-6"><div class="glass-panel chart-wrap"><canvas id="pingChart"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="glass-panel mt-4 p-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Realtime Log Viewer</h5>
+    <select id="logFilter" class="form-select form-select-sm w-auto">
+      <option value="all">All</option>
+      <option value="iperf">iPerf</option>
+      <option value="ping">Ping</option>
+      <option value="error">Error</option>
+      <option value="system">System</option>
+    </select>
+  </div>
+  <pre id="logConsole" class="terminal-log"></pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>window.APP_DEFAULTS = {{ config.defaults | tojson }};</script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

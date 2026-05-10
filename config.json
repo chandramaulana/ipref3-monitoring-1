@@ -1,0 +1,40 @@
+{
+  "host": "0.0.0.0",
+  "port": 5000,
+  "secret_key": "change-this-secret-key",
+  "socketio_async_mode": "threading",
+  "log_paths": {
+    "jsonl": "logs/test_logs.jsonl",
+    "runtime": "logs/runtime.log",
+    "error": "logs/error.log"
+  },
+  "data_paths": {
+    "history": "data/history.json",
+    "sessions": "data/sessions.json"
+  },
+  "defaults": {
+    "tcp": {
+      "duration": 60,
+      "streams": 1,
+      "mss": 1518
+    },
+    "udp": {
+      "duration": 60,
+      "bandwidth": "20M",
+      "packet_size": 512
+    },
+    "ping_interval_seconds": 1,
+    "auto_stop_minutes": 5
+  },
+  "brand": {
+    "campus_name": "Universitas Pertahanan RI",
+    "student_name": "HAFSHAH SUKMA SHAVIRA",
+    "logo_path": "img/Logo_Unhan.png"
+  },
+  "limits": {
+    "max_duration_seconds": 7200,
+    "max_streams": 32,
+    "max_packet_size": 65507,
+    "max_port": 65535
+  }
+}

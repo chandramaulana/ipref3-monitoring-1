@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="id" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}STARLINK Network Dashboard{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar glass-panel">
+      <div class="sidebar-main">
+        <div class="brand-wrap">
+          <div class="brand">
+            <img class="brand-logo" src="{{ url_for('static', filename=brand.get('logo_path', 'img/Logo_Unhan.png')) }}" alt="Logo Kampus">
+            <div>
+              <h1>IPREF3 OPS</h1>
+              <p>Network Testing Console</p>
+            </div>
+          </div>
+          <div class="brand-id">
+            <small class="brand-meta">{{ brand.get('campus_name', 'Nama Kampus') }}</small>
+            <small class="brand-meta">{{ brand.get('student_name', 'Nama Mahasiswa') }}</small>
+          </div>
+        </div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-label">Navigasi</div>
+        <nav class="nav-links">
+          <a href="{{ url_for('index') }}" class="nav-link-item">Dashboard</a>
+          <a href="{{ url_for('history_page') }}" class="nav-link-item">History</a>
+        </nav>
+      </div>
+      <div class="sidebar-footer">
+        <button id="themeToggle" class="btn btn-outline-light btn-sm">Toggle Theme</button>
+        <div id="realtimeIndicator" class="realtime-indicator offline">WS OFFLINE</div>
+      </div>
+    </aside>
+    <main class="content-area">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    (function () {
+      const key = 'dashboard-theme';
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        document.documentElement.setAttribute('data-bs-theme', saved);
+      }
+      const btn = document.getElementById('themeToggle');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+          const next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-bs-theme', next);
+          localStorage.setItem(key, next);
+        });
+      }
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
