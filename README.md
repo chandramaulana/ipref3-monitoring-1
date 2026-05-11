@@ -10,7 +10,7 @@ Dashboard web untuk monitoring dan pengujian jaringan berbasis iPerf3 dengan ars
 - Monitoring throughput, transfer, jitter, packet loss, retransmit, ping
 - Realtime chart dan terminal-style log viewer
 - Sidebar statis (tidak ikut scroll) + jam realtime + indikator koneksi websocket
-- Schedule: create, edit, delete task, dan eksekusi pada tanggal/jam tertentu
+- Schedule: create, edit, delete task, dan eksekusi berbasis rentang tanggal/jam
 - History: search, filter, sort, pagination, delete session
 - Final report: ringkasan, chart, tabel semua data per sampel + waktu
 - Export data: JSON, JSONL, CSV, XLSX (termasuk detail log)
@@ -184,11 +184,13 @@ Flow per sampling interval:
 ## Cara Pakai Schedule
 
 1. Buka menu Schedule.
-2. Isi Form Task pengujian (host, protocol, sampling, auto-stop, dan parameter lain).
-3. Atur tanggal dan jam eksekusi.
+2. Isi Form Task pengujian (host, protocol, sampling, dan parameter lain).
+3. Atur rentang mulai-selesai schedule.
 4. Klik Simpan Task.
-5. Task akan berjalan otomatis saat waktu jadwal tercapai.
-6. Anda bisa edit/hapus task selama belum running.
+5. Selama waktu sekarang masih di dalam rentang schedule, task akan dijalankan.
+6. Durasi pengujian otomatis menyesuaikan sisa waktu sampai akhir rentang.
+7. Rentang antar task divalidasi agar tidak tumpang tindih.
+8. Anda bisa edit/hapus task selama belum running.
 
 Catatan validasi nama:
 

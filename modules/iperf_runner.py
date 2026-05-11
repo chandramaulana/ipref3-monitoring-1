@@ -96,6 +96,7 @@ class IperfTestRunner:
         max_cycles = max(1, (total_seconds + sample_seconds - 1) // sample_seconds)
         elapsed = 0
         exit_code = 0
+        consecutive_failures = 0
 
         for cycle in range(1, max_cycles + 1):
             if self._stop_event.is_set():
@@ -134,8 +135,18 @@ class IperfTestRunner:
             time.sleep(0.05)
             local_code = self._proc.poll() if self._proc else -1
             if local_code not in (0, None):
-                exit_code = local_code
-                break
+                consecutive_failures += 1
+                self.on_log(
+                    "error",
+                    f"iPerf cycle {cycle} gagal (exit={local_code}). Lanjut ke siklus berikutnya selama jadwal masih aktif.",
+                )
+                # Hentikan jika gagal berturut-turut terlalu banyak untuk menghindari loop sia-sia.
+                if consecutive_failures >= 3:
+                    exit_code = local_code
+                    break
+                continue
+
+            consecutive_failures = 0
 
             elapsed += sample_seconds
             if last_metric:

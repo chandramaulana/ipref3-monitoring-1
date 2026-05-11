@@ -5,7 +5,7 @@
 <div class="hero glass-panel mb-4">
   <div>
     <h2>Schedule Pengujian</h2>
-    <p>Atur task pengujian otomatis berdasarkan tanggal dan jam.</p>
+    <p>Atur task pengujian otomatis berdasarkan rentang tanggal dan jam.</p>
   </div>
   <div class="hero-status" id="scheduleStatus">Ready</div>
 </div>
@@ -27,17 +27,17 @@
           <input id="taskName" class="form-control" required>
         </div>
         <div>
-          <label class="form-label" for="scheduledAt">Tanggal dan Jam Eksekusi</label>
-          <input id="scheduledAt" class="form-control" type="datetime-local" required>
+          <label class="form-label" for="startAt">Mulai Schedule</label>
+          <input id="startAt" class="form-control" type="datetime-local" required>
+        </div>
+        <div>
+          <label class="form-label" for="endAt">Selesai Schedule</label>
+          <input id="endAt" class="form-control" type="datetime-local" required>
         </div>
 
         <div>
           <label class="form-label" for="testName">Nama Pengujian</label>
           <input id="testName" class="form-control" required>
-        </div>
-        <div>
-          <label class="form-label" for="testDate">Tanggal Pengujian</label>
-          <input id="testDate" class="form-control" type="date" required>
         </div>
         <div>
           <label class="form-label" for="description">Keterangan</label>
@@ -61,10 +61,6 @@
             <option value="TCP">TCP</option>
             <option value="UDP">UDP</option>
           </select>
-        </div>
-        <div>
-          <label class="form-label" for="autoStop">Auto Stop (menit)</label>
-          <input id="autoStop" class="form-control" type="number" value="5" min="1" max="1440" required>
         </div>
         <div>
           <label class="form-label" for="sampling">Sampling (detik)</label>

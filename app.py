@@ -229,7 +229,12 @@ def _build_session_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         3600,
     )
     auto_stop_minutes = clamp(int(payload.get("auto_stop_minutes", defaults.get("auto_stop_minutes", 5))), 1, 1440)
-    total_duration_seconds = auto_stop_minutes * 60
+    total_duration_seconds = clamp(
+        int(payload.get("total_duration_seconds", auto_stop_minutes * 60)),
+        sampling_interval,
+        86400,
+    )
+    auto_stop_minutes = max(1, (total_duration_seconds + 59) // 60)
     port = clamp(int(payload.get("port", 5201)), 1, limit_cfg.get("max_port", 65535))
 
     session_payload = {
@@ -327,17 +332,36 @@ def _start_test_workflow(
 
 def _scheduler_loop() -> None:
     while not scheduler_stop_event.is_set():
-        due_items = schedule_manager.due_tasks(datetime.now())
+        now_dt = datetime.now()
+
+        expired_items = schedule_manager.expired_pending_tasks(now_dt)
+        for task in expired_items:
+            schedule_manager.mark_failed(task.get("id", ""), "Rentang jadwal terlewati sebelum task sempat dijalankan")
+            socketio.emit("schedule_update", {"task_id": task.get("id", ""), "status": "failed"})
+
+        due_items = schedule_manager.due_tasks(now_dt)
         for task in due_items:
             with state_lock:
                 busy = active_session is not None
             if busy:
                 continue
 
+            try:
+                end_dt = datetime.fromisoformat(task.get("end_at", ""))
+            except ValueError:
+                schedule_manager.mark_failed(task.get("id", ""), "Rentang jadwal tidak valid")
+                socketio.emit("schedule_update", {"task_id": task.get("id", ""), "status": "failed"})
+                continue
+
+            remaining_seconds = max(1, int((end_dt - datetime.now()).total_seconds()))
+            task_payload = dict(task.get("payload", {}))
+            task_payload["total_duration_seconds"] = remaining_seconds
+            if not task_payload.get("test_date"):
+                task_payload["test_date"] = (task.get("start_at") or "").split("T")[0]
+
             schedule_manager.mark_running(task["id"])
-            payload = task.get("payload", {})
             response, status = _start_test_workflow(
-                payload,
+                task_payload,
                 trigger_source="schedule",
                 schedule_task_id=task.get("id", ""),
                 schedule_task_name=task.get("task_name", "Scheduled Task"),
@@ -483,7 +507,8 @@ def api_list_schedules():
 def api_create_schedule():
     payload = request.get_json(force=True, silent=True) or {}
     task_name = sanitize_text(payload.get("task_name"), "Scheduled Task")
-    scheduled_at = sanitize_text(payload.get("scheduled_at"), "")
+    start_at = sanitize_text(payload.get("start_at", payload.get("scheduled_at")), "")
+    end_at = sanitize_text(payload.get("end_at"), "")
     task_payload = payload.get("payload", {})
     requested_test_name = sanitize_text(task_payload.get("test_name"), "Untitled Test")
 
@@ -493,14 +518,30 @@ def api_create_schedule():
         return jsonify({"ok": False, "error": "Nama pengujian sudah ada di history. Gunakan nama lain."}), 400
 
     try:
-        run_dt = datetime.fromisoformat(scheduled_at)
+        start_dt = datetime.fromisoformat(start_at)
+        end_dt = datetime.fromisoformat(end_at)
     except ValueError:
-        return jsonify({"ok": False, "error": "Format tanggal/jam tidak valid"}), 400
+        return jsonify({"ok": False, "error": "Format rentang tanggal/jam tidak valid"}), 400
 
-    if run_dt < datetime.now():
-        return jsonify({"ok": False, "error": "Jadwal harus di masa depan"}), 400
+    if end_dt <= start_dt:
+        return jsonify({"ok": False, "error": "Waktu selesai harus lebih besar dari waktu mulai"}), 400
 
-    created = schedule_manager.create_task({"task_name": task_name, "scheduled_at": scheduled_at, "payload": task_payload})
+    if end_dt < datetime.now():
+        return jsonify({"ok": False, "error": "Rentang jadwal sudah lewat"}), 400
+
+    overlap = schedule_manager.find_overlapping_task(start_at, end_at)
+    if overlap:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": f"Rentang jadwal bentrok dengan task '{overlap.get('task_name', '-')}' ({overlap.get('start_at', '-')} - {overlap.get('end_at', '-')})",
+                }
+            ),
+            400,
+        )
+
+    created = schedule_manager.create_task({"task_name": task_name, "start_at": start_at, "end_at": end_at, "payload": task_payload})
     return jsonify({"ok": True, "task": created})
 
 
@@ -508,7 +549,8 @@ def api_create_schedule():
 def api_update_schedule(task_id: str):
     payload = request.get_json(force=True, silent=True) or {}
     task_name = sanitize_text(payload.get("task_name"), "Scheduled Task")
-    scheduled_at = sanitize_text(payload.get("scheduled_at"), "")
+    start_at = sanitize_text(payload.get("start_at", payload.get("scheduled_at")), "")
+    end_at = sanitize_text(payload.get("end_at"), "")
     task_payload = payload.get("payload", {})
     requested_test_name = sanitize_text(task_payload.get("test_name"), "Untitled Test")
 
@@ -518,11 +560,27 @@ def api_update_schedule(task_id: str):
         return jsonify({"ok": False, "error": "Nama pengujian sudah ada di history. Gunakan nama lain."}), 400
 
     try:
-        datetime.fromisoformat(scheduled_at)
+        start_dt = datetime.fromisoformat(start_at)
+        end_dt = datetime.fromisoformat(end_at)
     except ValueError:
-        return jsonify({"ok": False, "error": "Format tanggal/jam tidak valid"}), 400
+        return jsonify({"ok": False, "error": "Format rentang tanggal/jam tidak valid"}), 400
 
-    updated = schedule_manager.update_task(task_id, {"task_name": task_name, "scheduled_at": scheduled_at, "payload": task_payload})
+    if end_dt <= start_dt:
+        return jsonify({"ok": False, "error": "Waktu selesai harus lebih besar dari waktu mulai"}), 400
+
+    overlap = schedule_manager.find_overlapping_task(start_at, end_at, exclude_task_id=task_id)
+    if overlap:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": f"Rentang jadwal bentrok dengan task '{overlap.get('task_name', '-')}' ({overlap.get('start_at', '-')} - {overlap.get('end_at', '-')})",
+                }
+            ),
+            400,
+        )
+
+    updated = schedule_manager.update_task(task_id, {"task_name": task_name, "start_at": start_at, "end_at": end_at, "payload": task_payload})
     if not updated:
         return jsonify({"ok": False, "error": "Task tidak ditemukan atau sedang berjalan"}), 404
     return jsonify({"ok": True, "task": updated})

@@ -23,18 +23,19 @@
 
   function collectPayload() {
     const protocol = document.getElementById("protocol").value;
+    const startAt = document.getElementById("startAt").value;
     return {
       task_name: document.getElementById("taskName").value.trim(),
-      scheduled_at: document.getElementById("scheduledAt").value,
+      start_at: startAt,
+      end_at: document.getElementById("endAt").value,
       payload: {
         test_name: document.getElementById("testName").value.trim(),
-        test_date: document.getElementById("testDate").value,
+        test_date: (startAt || "").split("T")[0],
         description: document.getElementById("description").value.trim(),
         weather: document.getElementById("weather").value.trim(),
         host: document.getElementById("host").value.trim(),
         port: Number(document.getElementById("port").value),
         protocol,
-        auto_stop_minutes: Number(document.getElementById("autoStop").value),
         sampling_interval: Number(document.getElementById("sampling").value),
         streams: Number(document.getElementById("streams").value),
         mss: Number(document.getElementById("mss").value),
@@ -48,7 +49,7 @@
     tbody.innerHTML = tasks.map((task) => `
       <tr>
         <td>${task.task_name || "-"}</td>
-        <td>${task.scheduled_at || "-"}</td>
+        <td>${task.start_at || task.scheduled_at || "-"} - ${task.end_at || "-"}</td>
         <td>${task.status || "-"}</td>
         <td>${(task.payload || {}).test_name || "-"}</td>
         <td>
@@ -113,15 +114,14 @@
     const payload = task.payload || {};
     document.getElementById("editTaskId").value = task.id;
     document.getElementById("taskName").value = task.task_name || "";
-    document.getElementById("scheduledAt").value = task.scheduled_at || "";
+    document.getElementById("startAt").value = task.start_at || task.scheduled_at || "";
+    document.getElementById("endAt").value = task.end_at || "";
     document.getElementById("testName").value = payload.test_name || "";
-    document.getElementById("testDate").value = payload.test_date || "";
     document.getElementById("description").value = payload.description || "";
     document.getElementById("weather").value = payload.weather || "";
     document.getElementById("host").value = payload.host || "";
     document.getElementById("port").value = payload.port || 5201;
     document.getElementById("protocol").value = payload.protocol || "TCP";
-    document.getElementById("autoStop").value = payload.auto_stop_minutes || 5;
     document.getElementById("sampling").value = payload.sampling_interval || 60;
     document.getElementById("streams").value = payload.streams || 1;
     document.getElementById("mss").value = payload.mss || 1518;
