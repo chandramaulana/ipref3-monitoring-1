@@ -11,6 +11,29 @@
   let sortKey = "start_time";
   let sortAsc = false;
 
+  function showSuccess(message, title) {
+    if (typeof window.showSuccessPopup === "function") {
+      window.showSuccessPopup(message, title);
+    }
+  }
+
+  function showError(message, title) {
+    if (typeof window.showErrorPopup === "function") {
+      window.showErrorPopup(message, title);
+      return;
+    }
+    if (typeof window.showInfoPopup === "function") {
+      window.showInfoPopup(message, title || "Gagal");
+    }
+  }
+
+  async function askConfirm(message, title) {
+    if (typeof window.showConfirmPopup === "function") {
+      return window.showConfirmPopup(message, title);
+    }
+    return false;
+  }
+
   function q(id) {
     return document.getElementById(id).value.trim();
   }
@@ -89,16 +112,19 @@
       return;
     }
 
-    if (!window.confirm(`Hapus session ${sessionId}?`)) {
+    const confirmed = await askConfirm(`Hapus session ${sessionId}?`, "Konfirmasi Hapus");
+    if (!confirmed) {
       return;
     }
 
     const res = await fetch(`/api/session/${sessionId}`, { method: "DELETE" });
     const data = await res.json();
     if (!data.ok) {
-      window.alert(data.error || "Gagal menghapus session");
+      showError(data.error || "Gagal menghapus session", "Gagal");
       return;
     }
+
+    showSuccess(`Session ${sessionId} berhasil dihapus.`, "Sukses");
     await loadData();
   });
 

@@ -81,18 +81,8 @@
     logConsole.scrollTop = logConsole.scrollHeight;
   }
 
-  async function stopTest() {
-    await fetch("/api/test/stop", { method: "POST" });
-  }
-
-  async function clearLogs() {
-    await fetch("/api/logs/clear", { method: "POST" });
-    logBuffer.length = 0;
-    renderLogs();
-  }
-
   function refreshStatus() {
-    fetch("/api/status")
+    return fetch("/api/status")
       .then((r) => r.json())
       .then((data) => {
         setStatus(data.running);
@@ -132,9 +122,6 @@
     setStatus(false);
   });
 
-  document.getElementById("stopBtn").addEventListener("click", stopTest);
-  document.getElementById("clearLogBtn").addEventListener("click", clearLogs);
-  document.getElementById("refreshBtn").addEventListener("click", refreshStatus);
   logFilter.addEventListener("change", renderLogs);
 
   charts.init();

@@ -278,6 +278,118 @@ body {
   box-shadow: 0 14px 26px rgba(36, 52, 84, 0.16);
 }
 
+[data-bs-theme="light"] .brand-id {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-bs-theme="light"] .sidebar-divider {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0));
+}
+
+[data-bs-theme="light"] .sidebar-clock {
+  background: rgba(17, 24, 39, 0.08);
+  color: #1f2937;
+}
+
+[data-bs-theme="light"] .sidebar-label,
+[data-bs-theme="light"] .brand p,
+[data-bs-theme="light"] .brand-meta,
+[data-bs-theme="light"] .metric-card span,
+[data-bs-theme="light"] #runningTaskInfo,
+[data-bs-theme="light"] #scheduleRunningInfo {
+  color: #334155;
+}
+
+[data-bs-theme="light"] .nav-link-item {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.07);
+}
+
+[data-bs-theme="light"] .nav-link-item:hover {
+  background: rgba(15, 23, 42, 0.14);
+  color: #0b1324;
+}
+
+[data-bs-theme="light"] .hero-status {
+  background: rgba(255, 159, 28, 0.2);
+  border-color: rgba(255, 159, 28, 0.45);
+  color: #8a4b00;
+}
+
+[data-bs-theme="light"] .metric-card {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+}
+
+[data-bs-theme="light"] .metric-card strong,
+[data-bs-theme="light"] h1,
+[data-bs-theme="light"] h2,
+[data-bs-theme="light"] h3,
+[data-bs-theme="light"] h4,
+[data-bs-theme="light"] h5,
+[data-bs-theme="light"] h6,
+[data-bs-theme="light"] p,
+[data-bs-theme="light"] label,
+[data-bs-theme="light"] span,
+[data-bs-theme="light"] th,
+[data-bs-theme="light"] td {
+  color: #0f172a;
+}
+
+[data-bs-theme="light"] .form-control,
+[data-bs-theme="light"] .form-select,
+[data-bs-theme="light"] .form-control:focus,
+[data-bs-theme="light"] .form-select:focus {
+  background-color: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.25);
+}
+
+[data-bs-theme="light"] .form-control::placeholder {
+  color: #64748b;
+}
+
+[data-bs-theme="light"] .btn-outline-light {
+  color: #1f2937;
+  border-color: rgba(31, 41, 55, 0.5);
+}
+
+[data-bs-theme="light"] .btn-outline-light:hover,
+[data-bs-theme="light"] .btn-outline-light:focus {
+  color: #ffffff;
+  background-color: #1f2937;
+  border-color: #1f2937;
+}
+
+[data-bs-theme="light"] .table {
+  --bs-table-bg: rgba(255, 255, 255, 0.86);
+  --bs-table-color: #0f172a;
+  --bs-table-border-color: rgba(15, 23, 42, 0.15);
+  --bs-table-hover-bg: rgba(15, 23, 42, 0.08);
+  --bs-table-hover-color: #0f172a;
+}
+
+/* Fallback ketika template masih memakai class table-dark */
+[data-bs-theme="light"] .table-dark {
+  --bs-table-bg: rgba(255, 255, 255, 0.86);
+  --bs-table-color: #0f172a;
+  --bs-table-striped-bg: rgba(15, 23, 42, 0.04);
+  --bs-table-striped-color: #0f172a;
+  --bs-table-hover-bg: rgba(15, 23, 42, 0.08);
+  --bs-table-hover-color: #0f172a;
+  --bs-table-border-color: rgba(15, 23, 42, 0.15);
+}
+
+[data-bs-theme="light"] .realtime-indicator.online {
+  background: rgba(16, 185, 129, 0.2);
+  color: #0f766e;
+}
+
+[data-bs-theme="light"] .realtime-indicator.offline {
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
 [data-bs-theme="light"] .terminal-log {
   background: #141b2a;
 }

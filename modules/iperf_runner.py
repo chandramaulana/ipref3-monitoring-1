@@ -1,6 +1,7 @@
 import subprocess
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
 from modules.parser import parse_iperf_line
@@ -63,15 +64,19 @@ class IperfTestRunner:
 
     def _run_ping_once(self) -> Optional[float]:
         command = build_ping_command(self.session_payload["host"])
-        proc = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
+        try:
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+        except OSError as err:
+            self.on_log("error", f"Ping gagal dijalankan: {err}")
+            return None
 
         ping_value: Optional[float] = None
         assert proc.stdout is not None
@@ -94,26 +99,47 @@ class IperfTestRunner:
         sample_seconds = max(1, int(self.session_payload.get("sampling_interval_seconds", 1)))
         total_seconds = max(sample_seconds, int(self.session_payload.get("total_duration_seconds", 60)))
         max_cycles = max(1, (total_seconds + sample_seconds - 1) // sample_seconds)
+        schedule_end_at = self.session_payload.get("schedule_end_at", "")
+        schedule_end_dt: Optional[datetime] = None
+        if schedule_end_at:
+            try:
+                schedule_end_dt = datetime.fromisoformat(schedule_end_at)
+                remaining = max(1.0, (schedule_end_dt - datetime.now()).total_seconds())
+                max_cycles = max(1, int((remaining + sample_seconds - 1) // sample_seconds))
+            except ValueError:
+                schedule_end_dt = None
+
         elapsed = 0
         exit_code = 0
-        consecutive_failures = 0
+        cycle = 0
 
-        for cycle in range(1, max_cycles + 1):
+        while True:
             if self._stop_event.is_set():
                 break
+
+            if schedule_end_dt and datetime.now() >= schedule_end_dt:
+                break
+
+            cycle += 1
 
             command = self._build_command()
             self.on_log("system", f"Cycle {cycle}/{max_cycles}: {' '.join(command)}")
 
-            self._proc = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-            )
+            try:
+                self._proc = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                )
+            except OSError as err:
+                self.on_log("error", f"iPerf gagal dijalankan: {err}")
+                if self._stop_event.wait(timeout=sample_seconds):
+                    break
+                continue
 
             last_metric: Optional[Dict[str, Any]] = None
             last_raw = ""
@@ -135,18 +161,18 @@ class IperfTestRunner:
             time.sleep(0.05)
             local_code = self._proc.poll() if self._proc else -1
             if local_code not in (0, None):
-                consecutive_failures += 1
                 self.on_log(
                     "error",
-                    f"iPerf cycle {cycle} gagal (exit={local_code}). Lanjut ke siklus berikutnya selama jadwal masih aktif.",
+                    f"iPerf cycle {cycle} gagal (exit={local_code}). Scheduler tetap berjalan hingga jadwal selesai atau task dihapus.",
                 )
-                # Hentikan jika gagal berturut-turut terlalu banyak untuk menghindari loop sia-sia.
-                if consecutive_failures >= 3:
-                    exit_code = local_code
+
+                ping_value = self._run_ping_once()
+                if ping_value is not None:
+                    self.on_ping(ping_value, f"ping={ping_value} ms")
+
+                if self._stop_event.wait(timeout=sample_seconds):
                     break
                 continue
-
-            consecutive_failures = 0
 
             elapsed += sample_seconds
             if last_metric:
@@ -156,5 +182,11 @@ class IperfTestRunner:
             ping_value = self._run_ping_once()
             if ping_value is not None:
                 self.on_ping(ping_value, f"ping={ping_value} ms")
+
+            if not schedule_end_dt and cycle >= max_cycles:
+                break
+
+        if self._stop_event.is_set() and exit_code in (0, None):
+            exit_code = 130
 
         self.on_finished(0 if exit_code in (0, None) else exit_code)

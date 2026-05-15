@@ -11,7 +11,7 @@
         <h3>Final Report - {{ session.session_id }}</h3>
         <p>{{ session.test_name }} | {{ session.protocol }} | {{ session.host }}:{{ session.port }}</p>
       </div>
-      <a class="btn btn-success" href="{{ url_for('api_export') }}?format=xlsx&session_id={{ session.session_id }}">Download Excel</a>
+      <a id="downloadReportBtn" class="btn btn-success" href="{{ url_for('api_export') }}?format=xlsx&session_id={{ session.session_id }}">Download Excel</a>
     </div>
 
     <div class="row g-3 mt-2">
@@ -83,6 +83,17 @@
 {% if session %}
 <script>
   (function () {
+    const downloadBtn = document.getElementById("downloadReportBtn");
+    if (downloadBtn) {
+      downloadBtn.addEventListener("click", () => {
+        setTimeout(() => {
+          if (typeof window.showSuccessPopup === "function") {
+            window.showSuccessPopup("Proses download laporan dimulai.", "Download");
+          }
+        }, 150);
+      });
+    }
+
     const metrics = window.REPORT_METRICS || [];
     const labels = metrics.map((m, i) => `${Number(m.interval_end ?? i + 1).toFixed(1)}s`);
     const throughput = metrics.map((m) => Number(Number(m.throughput_mbps || 0).toFixed(1)));

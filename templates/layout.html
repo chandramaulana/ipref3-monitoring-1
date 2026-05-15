@@ -47,6 +47,37 @@
     </main>
   </div>
 
+  <div class="modal fade" id="actionNoticeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="actionNoticeModalTitle">Informasi</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="actionNoticeModalBody">Aksi berhasil diproses.</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="actionNoticeModalOkBtn" data-bs-dismiss="modal">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="actionConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="actionConfirmModalTitle">Konfirmasi</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="actionConfirmModalBody">Apakah Anda yakin?</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-light" id="actionConfirmModalCancelBtn" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-danger" id="actionConfirmModalOkBtn">Lanjut</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -84,6 +115,108 @@
         tick();
         setInterval(tick, 1000);
       }
+
+      function showNoticePopup(message, title, kind) {
+        const modalElement = document.getElementById('actionNoticeModal');
+        const titleElement = document.getElementById('actionNoticeModalTitle');
+        const bodyElement = document.getElementById('actionNoticeModalBody');
+        const okBtn = document.getElementById('actionNoticeModalOkBtn');
+        if (!modalElement || !window.bootstrap || !window.bootstrap.Modal) {
+          return;
+        }
+
+        const safeKind = kind || 'info';
+        if (titleElement) {
+          titleElement.textContent = title || (safeKind === 'error' ? 'Gagal' : 'Informasi');
+        }
+        if (bodyElement) {
+          bodyElement.textContent = message || 'Aksi diproses.';
+        }
+        if (okBtn) {
+          okBtn.classList.remove('btn-primary', 'btn-success', 'btn-danger');
+          if (safeKind === 'success') {
+            okBtn.classList.add('btn-success');
+          } else if (safeKind === 'error') {
+            okBtn.classList.add('btn-danger');
+          } else {
+            okBtn.classList.add('btn-primary');
+          }
+        }
+
+        const modal = window.bootstrap.Modal.getOrCreateInstance(modalElement);
+        modal.show();
+      }
+
+      window.showSuccessPopup = function (message, title) {
+        showNoticePopup(message || 'Aksi berhasil diproses.', title || 'Berhasil', 'success');
+      };
+
+      window.showErrorPopup = function (message, title) {
+        showNoticePopup(message || 'Terjadi kesalahan.', title || 'Gagal', 'error');
+      };
+
+      window.showInfoPopup = function (message, title) {
+        showNoticePopup(message || 'Informasi.', title || 'Informasi', 'info');
+      };
+
+      window.showConfirmPopup = function (message, title) {
+        return new Promise((resolve) => {
+          const modalElement = document.getElementById('actionConfirmModal');
+          const titleElement = document.getElementById('actionConfirmModalTitle');
+          const bodyElement = document.getElementById('actionConfirmModalBody');
+          const okBtn = document.getElementById('actionConfirmModalOkBtn');
+          const cancelBtn = document.getElementById('actionConfirmModalCancelBtn');
+
+          if (!modalElement || !okBtn || !cancelBtn || !window.bootstrap || !window.bootstrap.Modal) {
+            resolve(false);
+            return;
+          }
+
+          if (titleElement) {
+            titleElement.textContent = title || 'Konfirmasi';
+          }
+          if (bodyElement) {
+            bodyElement.textContent = message || 'Apakah Anda yakin?';
+          }
+
+          const modal = window.bootstrap.Modal.getOrCreateInstance(modalElement);
+          let settled = false;
+
+          const cleanup = () => {
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+          };
+
+          const done = (result) => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            cleanup();
+            resolve(result);
+          };
+
+          const onOk = () => {
+            done(true);
+            modal.hide();
+          };
+
+          const onCancel = () => {
+            done(false);
+          };
+
+          const onHidden = () => {
+            done(false);
+          };
+
+          okBtn.addEventListener('click', onOk);
+          cancelBtn.addEventListener('click', onCancel);
+          modalElement.addEventListener('hidden.bs.modal', onHidden);
+
+          modal.show();
+        });
+      };
     })();
   </script>
   {% block scripts %}{% endblock %}

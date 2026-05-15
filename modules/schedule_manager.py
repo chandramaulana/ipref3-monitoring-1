@@ -170,6 +170,46 @@ class ScheduleManager:
                     output.append(self._normalize_task(item))
             return output
 
+    def recover_running_tasks_on_startup(self, now_dt: datetime) -> List[Dict[str, Any]]:
+        with self._lock:
+            self._cache = load_json_file(self.schedules_path, [])
+            recovered: List[Dict[str, Any]] = []
+            changed = False
+
+            for idx, item in enumerate(self._cache):
+                current_status = item.get("status")
+                if current_status not in {"running", "failed", "stopped"}:
+                    continue
+
+                window = self._task_window(item)
+                if not window:
+                    item["status"] = "failed"
+                    item["last_error"] = "Task running lama invalid setelah restart"
+                    item["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                    self._cache[idx] = item
+                    changed = True
+                    continue
+
+                start_dt, end_dt = window
+                if start_dt <= now_dt <= end_dt:
+                    item["status"] = "pending"
+                    item["last_error"] = ""
+                    item["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                    self._cache[idx] = item
+                    recovered.append(self._normalize_task(item))
+                    changed = True
+                elif now_dt > end_dt:
+                    item["status"] = "failed"
+                    item["last_error"] = "Task running terhenti karena restart di luar rentang jadwal"
+                    item["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                    self._cache[idx] = item
+                    changed = True
+
+            if changed:
+                self._save()
+
+            return recovered
+
     def mark_running(self, task_id: str) -> None:
         with self._lock:
             self._cache = load_json_file(self.schedules_path, [])

@@ -7,6 +7,29 @@
   const runningInfo = document.getElementById("scheduleRunningInfo");
   const statusBadge = document.getElementById("scheduleStatus");
 
+  function showSuccess(message, title) {
+    if (typeof window.showSuccessPopup === "function") {
+      window.showSuccessPopup(message, title);
+    }
+  }
+
+  function showError(message, title) {
+    if (typeof window.showErrorPopup === "function") {
+      window.showErrorPopup(message, title);
+      return;
+    }
+    if (typeof window.showInfoPopup === "function") {
+      window.showInfoPopup(message, title || "Gagal");
+    }
+  }
+
+  async function askConfirm(message, title) {
+    if (typeof window.showConfirmPopup === "function") {
+      return window.showConfirmPopup(message, title);
+    }
+    return false;
+  }
+
   function setProtocolFields() {
     const protocol = protocolSelect.value;
     tcpFields.classList.toggle("d-none", protocol !== "TCP");
@@ -95,9 +118,12 @@
 
     const data = await res.json();
     if (!data.ok) {
-      window.alert(data.error || "Gagal menyimpan task");
+      showError(data.error || "Gagal menyimpan task", "Gagal");
       return;
     }
+
+    const actionText = editTaskId ? "Task berhasil diperbarui." : "Task berhasil dibuat.";
+    showSuccess(actionText, "Sukses");
 
     resetForm();
     await fetchTasks();
@@ -133,16 +159,19 @@
   }
 
   async function deleteTask(taskId) {
-    if (!window.confirm("Hapus task ini?")) {
+    const confirmed = await askConfirm("Hapus task ini?", "Konfirmasi Hapus");
+    if (!confirmed) {
       return;
     }
 
     const res = await fetch(`/api/schedules/${taskId}`, { method: "DELETE" });
     const data = await res.json();
     if (!data.ok) {
-      window.alert(data.error || "Gagal menghapus task");
+      showError(data.error || "Gagal menghapus task", "Gagal");
       return;
     }
+
+    showSuccess("Task berhasil dihapus.", "Sukses");
 
     await fetchTasks();
   }
